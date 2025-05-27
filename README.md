@@ -1,50 +1,114 @@
-# Welcome to your Expo app 👋
+# Kigali Finance - Personal Finance Tracker
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A cross-platform mobile application built with React Native that allows users to track their personal expenses. This app was developed for a practical examination project.
 
-## Get started
+## Features
 
-1. Install dependencies
+- **User Authentication**: Register and login functionality
+- **Expense Management**: Add, edit, view, and delete expenses
+- **Dashboard**: View a list of all expenses with a monthly summary
+- **Categorization**: Categorize expenses with visual indicators
+- **Custom UI**: Includes a custom numeric keypad for amount input
 
-   ```bash
+## Technologies Used
+
+- React Native (with Expo)
+- React Navigation for screen navigation
+- Context API for state management
+- Axios for API integration
+- AsyncStorage for local data persistence
+- Vector Icons for UI elements
+- DateTimePicker and Picker for form inputs
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js (v14 or newer)
+- npm or yarn
+- Expo CLI
+- Android Studio and/or Xcode (for running on emulators/simulators)
+- Physical Android/iOS device with Expo Go app (optional)
+
+### Installation
+
+1. Clone the repository or download the source code
+
+2. Navigate to the project directory:
+   ```
+   cd KigaliFinance
+   ```
+
+3. Install the dependencies:
+   ```
    npm install
    ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
+   or
+   ```
+   yarn install
    ```
 
-In the output, you'll find options to open the app in a
+### Running the App
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+- **Android**:
+  ```
+  npm run android
+  ```
+  or
+  ```
+  yarn android
+  ```
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+- **iOS** (macOS only):
+  ```
+  npm run ios
+  ```
+  or
+  ```
+  yarn ios
+  ```
 
-## Get a fresh project
+- **Web**:
+  ```
+  npm run web
+  ```
+  or
+  ```
+  yarn web
+  ```
 
-When you're ready, run:
+- Using **Expo**:
+  ```
+  npx expo start
+  ```
+  Then scan the QR code with the Expo Go app (Android) or Camera app (iOS)
 
-```bash
-npm run reset-project
-```
+## API Integration
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+The app connects to a MockAPI backend with the following endpoints:
 
-## Learn more
+- Users: 
+  - `GET /users?username={email}`
+  - `POST /users`
 
-To learn more about developing your project with Expo, look at the following resources:
+- Expenses: 
+  - `GET /expenses`
+  - `POST /expenses`
+  - `GET /expenses/{expenseId}`
+  - `PUT /expenses/{expenseId}`
+  - `DELETE /expenses/{expenseId}`
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Project Structure
 
-## Join the community
+- `/src`: Source code
+  - `/api`: API integration functions
+  - `/components`: Reusable UI components
+  - `/context`: React Context for state management
+  - `/navigation`: Navigation configuration
+  - `/screens`: Screen components
+  - `/utils`: Utility functions for formatting and other helpers
+- `/assets`: Images and static assets
 
-Join our community of developers creating universal apps.
+## License
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+This project was created for educational purposes.
