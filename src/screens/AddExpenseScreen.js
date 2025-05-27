@@ -22,28 +22,11 @@ import { scheduleBudgetNotification } from '../utils/notificationManager';
 import Header from '../../components/ui/Header';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
-import { CategoryPill } from '../../components/ui/CategoryPill';
+import { CategoryPill, CATEGORY_CONFIG } from '../../components/ui/CategoryPill';
 import theme from '../../constants/theme';
 
-// Available expense categories
-const CATEGORIES = [
-  'Groceries',
-  'Transport',
-  'Dining Out',
-  'Entertainment',
-  'Shopping',
-  'Utilities',
-  'Housing',
-  'Healthcare',
-  'Personal',
-  'Education',
-  'Travel',
-  'Gifts',
-  'Electronics',
-  'Insurance',
-  'Savings',
-  'Others',
-];
+// Available expense categories - using the same approach as budget screen for consistency
+const CATEGORIES = Object.keys(CATEGORY_CONFIG);
 
 const AddExpenseScreen = ({ navigation, route }) => {
   const { user } = useContext(AuthContext);
