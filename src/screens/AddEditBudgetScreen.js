@@ -216,20 +216,17 @@ const AddEditBudgetScreen = ({ navigation, route }) => {
             {/* Category Selection */}
             <View style={styles.fieldContainer}>
               <Text style={styles.label}>Category</Text>
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.categoriesContainer}
-              >
+              <View style={styles.categoriesGrid}>
                 {CATEGORIES.map((cat, index) => (
                   <CategoryPill
                     key={cat}
                     category={cat}
                     selected={index === selectedCategoryIndex}
                     onPress={() => handleCategorySelect(index)}
+                    style={styles.categoryPill}
                   />
                 ))}
-              </ScrollView>
+              </View>
             </View>
             
             {/* Budget Amount */}
@@ -317,8 +314,14 @@ const styles = StyleSheet.create({
     color: theme.COLORS.text.primary,
     marginBottom: 8,
   },
-  categoriesContainer: {
-    paddingVertical: 8,
+  categoriesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: theme.SPACING.sm,
+  },
+  categoryPill: {
+    marginRight: theme.SPACING.sm,
+    marginBottom: theme.SPACING.sm,
   },
   pickerContainer: {
     borderWidth: 1,
