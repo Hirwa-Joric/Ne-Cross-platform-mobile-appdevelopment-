@@ -5,176 +5,308 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  RefreshControl,
   ActivityIndicator,
+  RefreshControl,
+  SafeAreaView,
+  StatusBar,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { getAllExpenses } from '../api/expenseApi';
-import { formatCurrency, calculateMonthlyTotal } from '../utils/formatUtils';
-import { getCategoryIcon } from '../utils/categoryIcons';
+import { Ionicons } from '@expo/vector-icons';
+import axios from 'axios';
+import { useFocusEffect } from '@react-navigation/native';
 import { AuthContext } from '../context/AuthContext';
-
-// Import icon libraries
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
+import Card from '../../components/ui/Card';
+import EmptyState from '../../assets/images/empty-state';
+import theme from '../../constants/theme';
+import { CategoryIcon, CATEGORY_CONFIG } from '../../components/ui/CategoryPill';
 
 const ExpensesScreen = ({ navigation }) => {
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [monthlyTotal, setMonthlyTotal] = useState('RWF 0');
-  const { logout } = useContext(AuthContext);
+  const [totalAmount, setTotalAmount] = useState(0);
+  
+  const { user, logout } = useContext(AuthContext);
 
   const fetchExpenses = async () => {
     try {
       setLoading(true);
-      const data = await getAllExpenses();
-      console.log('Fetched expenses:', data.length);
-      setExpenses(data);
-      setMonthlyTotal(calculateMonthlyTotal(data));
+      
+      // If user ID is not available yet, don't attempt to fetch expenses
+      if (!user || !user.id) {
+        setExpenses([]);
+        setTotalAmount(0);
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+      
+      const response = await axios.get(
+        'https://67ac71475853dfff53dab929.mockapi.io/api/v1/expenses'
+      );
+      
+      console.log('Fetched expenses:', response.data.length);
+      
+      // Filter expenses for current user
+      const userExpenses = response.data.filter(expense => 
+        expense.userId === user.id
+      );
+      
+      // Sort expenses by date (newest first)
+      const sortedExpenses = userExpenses.sort((a, b) => 
+        new Date(b.date) - new Date(a.date)
+      );
+      
+      setExpenses(sortedExpenses);
+      
+      // Calculate total amount for the current month
+      const currentMonth = new Date().getMonth();
+      const currentYear = new Date().getFullYear();
+      
+      const monthlyExpenses = sortedExpenses.filter(expense => {
+        const expenseDate = new Date(expense.date);
+        return expenseDate.getMonth() === currentMonth && 
+               expenseDate.getFullYear() === currentYear;
+      });
+      
+      const total = monthlyExpenses.reduce((sum, expense) => 
+        sum + Number(expense.amount || 0), 0
+      );
+      
+      setTotalAmount(total);
     } catch (error) {
-      console.log('Error fetching expenses:', error);
-      Alert.alert('Error', 'Failed to fetch expenses');
+      console.error('Error fetching expenses:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  useEffect(() => {
-    fetchExpenses();
-    // Listen for navigation focus events to refresh expenses when screen comes into focus
-    const unsubscribe = navigation.addListener('focus', () => {
+  // Fetch expenses when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
       fetchExpenses();
-    });
-    return unsubscribe;
-  }, [navigation]);
+    }, [user?.id])
+  );
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    fetchExpenses();
+    await fetchExpenses();
   };
 
   const handleAddExpense = () => {
     navigation.navigate('AddExpense');
   };
 
-  const renderExpenseItem = ({ item }) => {
-    console.log('Rendering expense item:', item.description);
-    // Default icon in case the mapping fails
-    let iconName = 'attach-money';
-    let IconComponent = MaterialIcons;
-    
-    try {
-      const iconInfo = getCategoryIcon(item.description);
-      console.log('Icon info:', iconInfo);
-      
-      // Determine which Icon component to use based on the pack
-      switch (iconInfo.pack) {
-        case 'MaterialIcons':
-          IconComponent = MaterialIcons;
-          iconName = iconInfo.name;
-          break;
-        case 'MaterialCommunityIcons':
-          IconComponent = MaterialCommunityIcons;
-          iconName = iconInfo.name;
-          break;
-        case 'Ionicons':
-          IconComponent = Ionicons;
-          iconName = iconInfo.name;
-          break;
-        case 'FontAwesome':
-          IconComponent = FontAwesome;
-          iconName = iconInfo.name;
-          break;
-        default:
-          // Default to a money icon from MaterialIcons
-          IconComponent = MaterialIcons;
-          iconName = 'attach-money';
-      }
-    } catch (error) {
-      console.log('Error setting up icons:', error);
-      // Fallback to default icon
-      IconComponent = MaterialIcons;
-      iconName = 'attach-money';
-    }
+  const handleExpensePress = (expense) => {
+    navigation.navigate('ExpenseDetail', { expenseId: expense.id });
+  };
 
+  // Format date: "Apr 21, 2024"
+  const formatDate = (dateString) => {
+    const options = { month: 'short', day: 'numeric' };
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', options);
+  };
+
+  const formatAmount = (amount) => {
+    return Number(amount).toLocaleString('en-US');
+  };
+
+  const getUserInitials = () => {
+    if (!user || !user.fullName) return '?';
+    
+    const nameParts = user.fullName.split(' ');
+    if (nameParts.length === 1) return nameParts[0].charAt(0).toUpperCase();
+    
+    return (
+      nameParts[0].charAt(0).toUpperCase() + 
+      nameParts[nameParts.length - 1].charAt(0).toUpperCase()
+    );
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Logout', onPress: async () => {
+          try {
+            await logout();
+          } catch (error) {
+            console.error('Error logging out:', error);
+          }
+        }}
+      ]
+    );
+  };
+
+  const renderExpenseItem = ({ item }) => {
+    // Get the category from either the category field or description field
+    const categoryText = item.category || item.description || "Others";
+    
+    // Convert to title case for consistency
+    const formattedCategory = categoryText.charAt(0).toUpperCase() + 
+                              categoryText.slice(1).toLowerCase();
+    
+    // Try to map to one of our predefined categories if possible
+    const bestMatchCategory = getBestMatchCategory(formattedCategory);
+    
+    // Get the icon config
+    const iconConfig = CATEGORY_CONFIG[bestMatchCategory] || CATEGORY_CONFIG.Others;
+    
     return (
       <TouchableOpacity
         style={styles.expenseItem}
-        onPress={() => navigation.navigate('ExpenseDetail', { id: item.id })}
+        onPress={() => handleExpensePress(item)}
       >
-        <View style={styles.categoryIconContainer}>
-          <IconComponent
-            name={iconName}
-            size={24}
-            color="#1a73e8"
-          />
+        <View style={[styles.categoryIcon, { backgroundColor: iconConfig.color + '20' }]}>
+          <CategoryIcon category={bestMatchCategory} size={24} color={iconConfig.color} />
         </View>
-        <View style={styles.expenseInfo}>
-          <Text style={styles.expenseName}>{item.name}</Text>
-          <Text style={styles.expenseCategory}>{item.description}</Text>
+        
+        <View style={styles.expenseDetails}>
+          <Text style={styles.expenseName} numberOfLines={1}>
+            {item.name || "Untitled"}
+          </Text>
+          <Text style={styles.categoryText} numberOfLines={1}>
+            {formattedCategory}
+          </Text>
         </View>
-        <View style={styles.expenseAmount}>
-          <Text style={styles.amountText}>{formatCurrency(item.amount)}</Text>
+        
+        <View style={styles.expenseMetadata}>
+          <Text style={styles.expenseDate}>{formatDate(item.date)}</Text>
+          <Text style={styles.expenseAmount}>
+            RWF {formatAmount(item.amount)}
+          </Text>
         </View>
       </TouchableOpacity>
     );
   };
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } catch (error) {
-      console.log('Error logging out:', error);
+  
+  // Helper function to map API categories to our predefined categories
+  const getBestMatchCategory = (apiCategory) => {
+    // Direct matches
+    if (CATEGORY_CONFIG[apiCategory]) {
+      return apiCategory;
     }
+    
+    // Common mappings
+    const categoryMappings = {
+      'Food': 'Groceries',
+      'Grocery': 'Groceries',
+      'School': 'Education',
+      'Bills': 'Utilities',
+      'Transportation': 'Transport',
+      'Flight': 'Travel',
+      'Trip': 'Travel',
+      'Movie': 'Entertainment',
+      'Dining': 'Dining Out',
+      'Restaurant': 'Dining Out',
+      'Home': 'Housing',
+      'Rent': 'Housing',
+      'Health': 'Healthcare',
+      'Doctor': 'Healthcare',
+      'Medicine': 'Healthcare',
+      'Tools': 'Others',
+      'Tool': 'Others',
+      'Clothes': 'Shopping',
+      'Clothing': 'Shopping',
+      'Gift': 'Gifts',
+      'Present': 'Gifts',
+      'Electronic': 'Electronics',
+      'Gadget': 'Electronics',
+      'Device': 'Electronics',
+      'Insurance': 'Insurance',
+      'Policy': 'Insurance',
+      'Savings': 'Savings',
+      'Investment': 'Savings',
+    };
+    
+    // Check if the category contains any of our mapped keywords
+    for (const [keyword, category] of Object.entries(categoryMappings)) {
+      if (apiCategory.toLowerCase().includes(keyword.toLowerCase())) {
+        return category;
+      }
+    }
+    
+    return 'Others';
   };
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor={theme.COLORS.background} />
+      
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Expenses</Text>
-        <TouchableOpacity 
-          style={styles.headerAction} 
-          onPress={handleLogout}
-        >
-          <MaterialIcons name="logout" size={24} color="#555" />
+        <View>
+          <Text style={styles.welcomeText}>Welcome,</Text>
+          <Text style={styles.userName}>{user?.fullName || 'User'}</Text>
+        </View>
+        
+        <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <Ionicons name="log-out-outline" size={24} color={theme.COLORS.text.secondary} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.profileButton}>
+            <View style={styles.profileAvatar}>
+              <Text style={styles.profileInitials}>{getUserInitials()}</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+      </View>
+      
+      <Card style={styles.totalExpensesCard}>
+        <Text style={styles.totalExpensesTitle}>This Month's Total Expenses</Text>
+        <Text style={styles.totalExpensesAmount}>RWF {formatAmount(totalAmount)}</Text>
+      </Card>
+
+      <View style={styles.expensesListHeader}>
+        <Text style={styles.expensesListTitle}>Recent Expenses</Text>
+        <TouchableOpacity onPress={handleAddExpense}>
+          <Ionicons name="add" size={24} color={theme.COLORS.primary} />
         </TouchableOpacity>
       </View>
-
-      <View style={styles.totalContainer}>
-        <Text style={styles.totalLabel}>Total Expenses this Month</Text>
-        <Text style={styles.totalAmount}>{monthlyTotal}</Text>
-      </View>
-
+      
       {loading && !refreshing ? (
-        <ActivityIndicator size="large" color="#1a73e8" style={styles.loader} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.COLORS.primary} />
+        </View>
       ) : (
-        <FlatList
-          data={expenses}
-          keyExtractor={(item) => item.id}
-          renderItem={renderExpenseItem}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          contentContainerStyle={styles.listContainer}
-          ListEmptyComponent={() => (
+        <>
+          {expenses.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No expenses found</Text>
-              <Text style={styles.emptySubText}>Tap + to add your first expense</Text>
+              <EmptyState size={180} />
+              <Text style={styles.emptyText}>No expenses yet</Text>
+              <Text style={styles.emptySubText}>
+                Tap the + button to add your first expense
+              </Text>
             </View>
+          ) : (
+            <FlatList
+              data={expenses}
+              renderItem={renderExpenseItem}
+              keyExtractor={item => item.id}
+              contentContainerStyle={styles.expensesList}
+              showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  colors={[theme.COLORS.primary]}
+                  tintColor={theme.COLORS.primary}
+                />
+              }
+            />
           )}
-        />
+        </>
       )}
-
+      
       <TouchableOpacity
-        style={styles.fab}
+        style={styles.addButton}
         onPress={handleAddExpense}
       >
-        <MaterialIcons name="add" size={24} color="#fff" />
+        <Ionicons name="add" size={28} color="white" />
       </TouchableOpacity>
     </SafeAreaView>
   );
@@ -183,116 +315,162 @@ const ExpensesScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: theme.COLORS.background,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    paddingHorizontal: theme.SPACING.lg,
+    paddingTop: theme.SPACING.lg,
+    paddingBottom: theme.SPACING.md,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+  welcomeText: {
+    fontSize: theme.FONT_SIZES.md,
+    fontFamily: theme.FONTS.regular,
+    color: theme.COLORS.text.secondary,
   },
-  headerAction: {
-    padding: 8,
+  userName: {
+    fontSize: theme.FONT_SIZES.xl,
+    fontFamily: theme.FONTS.bold,
+    color: theme.COLORS.text.primary,
   },
-  totalContainer: {
-    backgroundColor: '#f5f5f5',
-    padding: 20,
+  headerActions: {
+    flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
   },
-  totalLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
+  logoutButton: {
+    padding: theme.SPACING.xs,
+    marginRight: theme.SPACING.sm,
   },
-  totalAmount: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
+  profileButton: {
+    padding: theme.SPACING.xs,
   },
-  listContainer: {
-    flexGrow: 1,
+  profileAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileInitials: {
+    color: 'white',
+    fontSize: theme.FONT_SIZES.md,
+    fontFamily: theme.FONTS.semiBold,
+  },
+  totalExpensesCard: {
+    marginHorizontal: theme.SPACING.lg,
+    marginTop: theme.SPACING.md,
+    backgroundColor: theme.COLORS.primary,
+    borderRadius: theme.BORDER_RADIUS.lg,
+  },
+  totalExpensesTitle: {
+    fontSize: theme.FONT_SIZES.md,
+    fontFamily: theme.FONTS.regular,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginBottom: theme.SPACING.md,
+  },
+  totalExpensesAmount: {
+    fontSize: theme.FONT_SIZES.xxxl,
+    fontFamily: theme.FONTS.bold,
+    color: 'white',
+  },
+  expensesListHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: theme.SPACING.xl,
+    marginBottom: theme.SPACING.md,
+    paddingHorizontal: theme.SPACING.lg,
+  },
+  expensesListTitle: {
+    fontSize: theme.FONT_SIZES.lg,
+    fontFamily: theme.FONTS.semiBold,
+    color: theme.COLORS.text.primary,
+  },
+  expensesList: {
+    paddingHorizontal: theme.SPACING.lg,
     paddingBottom: 80, // Space for FAB
   },
   expenseItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    paddingVertical: theme.SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: theme.COLORS.lightGrey,
   },
-  categoryIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#f0f7ff',
+  categoryIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: theme.SPACING.md,
   },
-  expenseInfo: {
+  expenseDetails: {
     flex: 1,
+    paddingRight: theme.SPACING.sm,
   },
   expenseName: {
-    fontSize: 16,
-    color: '#333',
-    fontWeight: '500',
+    fontSize: theme.FONT_SIZES.md,
+    fontFamily: theme.FONTS.medium,
+    color: theme.COLORS.text.primary,
+    marginBottom: 4,
   },
-  expenseCategory: {
-    fontSize: 14,
-    color: '#666',
+  categoryText: {
+    fontSize: theme.FONT_SIZES.sm,
+    fontFamily: theme.FONTS.regular,
+    color: theme.COLORS.text.secondary,
+  },
+  expenseMetadata: {
+    alignItems: 'flex-end',
+  },
+  expenseDate: {
+    fontSize: theme.FONT_SIZES.xs,
+    fontFamily: theme.FONTS.regular,
+    color: theme.COLORS.text.light,
+    marginBottom: 4,
   },
   expenseAmount: {
-    justifyContent: 'center',
+    fontSize: theme.FONT_SIZES.md,
+    fontFamily: theme.FONTS.semiBold,
+    color: theme.COLORS.text.primary,
   },
-  amountText: {
-    fontSize: 16,
-    color: '#333',
-    fontWeight: '500',
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
-    marginTop: 50,
+    paddingHorizontal: theme.SPACING.xl,
   },
   emptyText: {
-    fontSize: 18,
-    color: '#666',
-    marginBottom: 8,
+    fontSize: theme.FONT_SIZES.xl,
+    fontFamily: theme.FONTS.semiBold,
+    color: theme.COLORS.text.primary,
+    marginBottom: theme.SPACING.sm,
   },
   emptySubText: {
-    fontSize: 14,
-    color: '#999',
+    fontSize: theme.FONT_SIZES.md,
+    fontFamily: theme.FONTS.regular,
+    color: theme.COLORS.text.secondary,
+    textAlign: 'center',
   },
-  fab: {
+  addButton: {
     position: 'absolute',
-    right: 20,
-    bottom: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#1a73e8',
+    right: theme.SPACING.lg,
+    bottom: theme.SPACING.xl,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: theme.COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  loader: {
-    marginTop: 50,
+    ...theme.SHADOWS.large,
   },
 });
 

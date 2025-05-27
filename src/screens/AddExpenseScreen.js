@@ -1,142 +1,173 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
   StyleSheet,
-  Alert,
+  TouchableOpacity,
   ScrollView,
-  TouchableWithoutFeedback,
-  Keyboard,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Picker } from '@react-native-picker/picker';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import moment from 'moment';
-import { addExpense, getExpenseById, updateExpense } from '../api/expenseApi';
+import axios from 'axios';
+import { format } from 'date-fns';
+import { AuthContext } from '../context/AuthContext';
+import Header from '../../components/ui/Header';
+import Input from '../../components/ui/Input';
+import Button from '../../components/ui/Button';
+import { CategoryPill } from '../../components/ui/CategoryPill';
+import theme from '../../constants/theme';
 
+// Available expense categories
 const CATEGORIES = [
-  'Food',
-  'Transport',
-  'Utilities',
-  'Rent',
   'Groceries',
+  'Transport',
+  'Dining Out',
   'Entertainment',
-  'Dining',
-  'Other',
+  'Shopping',
+  'Utilities',
+  'Housing',
+  'Healthcare',
+  'Personal',
+  'Education',
+  'Travel',
+  'Gifts',
+  'Electronics',
+  'Insurance',
+  'Savings',
+  'Others',
 ];
 
-const AddExpenseScreen = ({ route, navigation }) => {
-  const expenseId = route.params?.id;
-  const isEditing = !!expenseId;
-
-  const [name, setName] = useState('');
+const AddExpenseScreen = ({ navigation, route }) => {
+  const { user } = useContext(AuthContext);
+  const isEditing = route.params?.expenseId !== undefined;
+  const expenseId = route.params?.expenseId;
+  
+  // Form state
+  const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
+  const [category, setCategory] = useState('Groceries');
   const [date, setDate] = useState(new Date());
-  const [category, setCategory] = useState(CATEGORIES[0]);
+  
+  // UI state
   const [loading, setLoading] = useState(false);
+  const [isFetchingExpense, setIsFetchingExpense] = useState(isEditing);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  
+  // Form validation
+  const [descriptionError, setDescriptionError] = useState('');
+  const [amountError, setAmountError] = useState('');
 
-  // Custom numeric keypad digits
-  const keypadButtons = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'];
-
+  // Fetch expense data if editing
   useEffect(() => {
     if (isEditing) {
-      fetchExpenseDetails();
+      fetchExpense();
     }
-  }, [expenseId]);
+  }, [isEditing, expenseId]);
 
-  const fetchExpenseDetails = async () => {
+  const fetchExpense = async () => {
     try {
-      setLoading(true);
-      const expense = await getExpenseById(expenseId);
-
-      if (expense) {
-        setName(expense.name || '');
-        setAmount(expense.amount || '');
-        setDate(new Date(expense.date || new Date()));
-        setCategory(expense.description || CATEGORIES[0]);
-      }
+      setIsFetchingExpense(true);
+      console.log('Fetching expense for editing, ID:', expenseId);
+      
+      const response = await axios.get(
+        `https://67ac71475853dfff53dab929.mockapi.io/api/v1/expenses/${expenseId}`
+      );
+      
+      const expense = response.data;
+      console.log('Fetched expense for editing:', expense);
+      
+      // Populate form fields with expense data
+      setDescription(expense.name || '');
+      setAmount(expense.amount ? expense.amount.toString() : '');
+      setCategory(expense.description || 'Others');
+      setDate(new Date(expense.date));
     } catch (error) {
-      console.log('Error fetching expense:', error);
-      Alert.alert('Error', 'Failed to fetch expense details');
+      console.error('Error fetching expense details:', error);
+      Alert.alert('Error', 'Unable to load expense details');
+      navigation.goBack();
     } finally {
-      setLoading(false);
+      setIsFetchingExpense(false);
     }
   };
 
-  const handleDateChange = (event, selectedDate) => {
-    setShowDatePicker(false);
-    if (selectedDate) {
-      setDate(selectedDate);
-    }
-  };
-
-  const handleNumericKeypad = (value) => {
-    if (value === '⌫') {
-      setAmount((prev) => prev.slice(0, -1));
-    } else if (value === '.' && amount.includes('.')) {
-      // Prevent multiple decimal points
-      return;
-    } else {
-      setAmount((prev) => prev + value);
-    }
-  };
-
-  const validateInputs = () => {
-    if (!name.trim()) {
-      Alert.alert('Error', 'Please enter a description');
-      return false;
+  const validateForm = () => {
+    let isValid = true;
+    
+    // Reset errors
+    setDescriptionError('');
+    setAmountError('');
+    
+    // Validate description
+    if (!description.trim()) {
+      setDescriptionError('Description is required');
+      isValid = false;
     }
     
-    if (!amount.trim()) {
-      Alert.alert('Error', 'Please enter an amount');
-      return false;
+    // Validate amount
+    if (!amount) {
+      setAmountError('Amount is required');
+      isValid = false;
+    } else if (isNaN(amount) || Number(amount) <= 0) {
+      setAmountError('Please enter a valid amount');
+      isValid = false;
     }
     
-    // Check if amount is a valid number
-    const numAmount = parseFloat(amount);
-    if (isNaN(numAmount) || numAmount <= 0) {
-      Alert.alert('Error', 'Please enter a valid positive amount');
-      return false;
-    }
-    
-    if (!date) {
-      Alert.alert('Error', 'Please select a date');
-      return false;
-    }
-    
-    return true;
+    return isValid;
   };
 
   const handleSave = async () => {
-    if (!validateInputs()) return;
+    if (!validateForm()) return;
     
     try {
       setLoading(true);
       
       const expenseData = {
-        name,
-        amount,
-        date: moment(date).format('YYYY-MM-DD'),
-        category,
+        name: description.trim(), // Using name field for description
+        amount: amount,
+        description: category, // Using description field for category
+        date: format(date, "yyyy-MM-dd'T'HH:mm:ss.SSSXXX"),
+        userId: user?.id,
       };
       
-      if (isEditing) {
-        await updateExpense(expenseId, expenseData);
-        Alert.alert('Success', 'Expense updated successfully');
-      } else {
-        await addExpense(expenseData);
-        Alert.alert('Success', 'Expense added successfully');
-      }
+      console.log('Saving expense data:', expenseData);
       
-      navigation.goBack();
+      if (isEditing) {
+        // Update existing expense
+        const response = await axios.put(
+          `https://67ac71475853dfff53dab929.mockapi.io/api/v1/expenses/${expenseId}`,
+          expenseData
+        );
+        console.log('Updated expense:', response.data);
+        
+        // Successfully updated, now navigate back
+        Alert.alert(
+          'Success', 
+          'Expense updated successfully',
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+      } else {
+        // Create new expense
+        const response = await axios.post(
+          'https://67ac71475853dfff53dab929.mockapi.io/api/v1/expenses',
+          expenseData
+        );
+        console.log('Created expense:', response.data);
+        
+        // Successfully created, now navigate back
+        Alert.alert(
+          'Success', 
+          'Expense added successfully',
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+      }
     } catch (error) {
-      console.log('Error saving expense:', error);
+      console.error('Error saving expense:', error);
       Alert.alert('Error', `Failed to ${isEditing ? 'update' : 'add'} expense`);
-    } finally {
       setLoading(false);
     }
   };
@@ -145,249 +176,211 @@ const AddExpenseScreen = ({ route, navigation }) => {
     navigation.goBack();
   };
 
-  return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+  const onChangeDatePicker = (event, selectedDate) => {
+    setShowDatePicker(false);
+    
+    if (selectedDate) {
+      setDate(selectedDate);
+    }
+  };
+
+  const formatDisplayDate = (date) => {
+    return format(date, 'MM/dd/yyyy');
+  };
+
+  if (isFetchingExpense) {
+    return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={handleCancel} style={styles.closeButton}>
-            <MaterialIcons name="close" size={24} color="#333" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>{isEditing ? 'Edit Expense' : 'Add Expense'}</Text>
-          <View style={styles.emptyView} />
+        <Header 
+          title={isEditing ? 'Edit Expense' : 'Add Expense'} 
+          onBack={() => navigation.goBack()}
+        />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.COLORS.primary} />
+          <Text style={styles.loadingText}>Loading expense details...</Text>
         </View>
+      </SafeAreaView>
+    );
+  }
 
-        <ScrollView style={styles.contentContainer}>
+  return (
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardAvoidingView}
+      >
+        <Header 
+          title={isEditing ? 'Edit Expense' : 'Add Expense'} 
+          onBack={handleCancel}
+          rightIcon={
+            loading ? (
+              <ActivityIndicator size="small" color={theme.COLORS.primary} />
+            ) : null
+          }
+        />
+        
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent} 
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={styles.formContainer}>
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Description</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="What did you spend on?"
-                value={name}
-                onChangeText={setName}
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Amount</Text>
-              <TextInput
-                style={styles.amountInput}
-                placeholder="0"
-                value={amount}
-                editable={false} // Disable direct editing, use custom keypad
-                keyboardType="numeric"
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Date</Text>
-              <TouchableOpacity 
+            <Input
+              label="Description"
+              placeholder="E.g. Groceries"
+              value={description}
+              onChangeText={setDescription}
+              error={descriptionError}
+            />
+            
+            <Input
+              label="Amount"
+              placeholder="0"
+              value={amount}
+              onChangeText={setAmount}
+              keyboardType="numeric"
+              error={amountError}
+              leftIcon={
+                <Text style={styles.currencySymbol}>RWF</Text>
+              }
+            />
+            
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Date</Text>
+              <TouchableOpacity
                 style={styles.datePickerButton}
                 onPress={() => setShowDatePicker(true)}
               >
-                <Text style={styles.dateText}>
-                  {moment(date).format('MMMM D, YYYY')}
-                </Text>
-                <MaterialIcons name="calendar-today" size={20} color="#666" />
-              </TouchableOpacity>
-              {showDatePicker && (
-                <DateTimePicker
-                  value={date}
-                  mode="date"
-                  display="default"
-                  onChange={handleDateChange}
+                <Ionicons 
+                  name="calendar-outline" 
+                  size={20} 
+                  color={theme.COLORS.text.light} 
+                  style={styles.dateIcon}
                 />
-              )}
+                <Text style={styles.dateText}>
+                  {formatDisplayDate(date)}
+                </Text>
+              </TouchableOpacity>
             </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Category</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={category}
-                  onValueChange={(itemValue) => setCategory(itemValue)}
-                  style={styles.picker}
-                >
-                  {CATEGORIES.map((cat) => (
-                    <Picker.Item key={cat} label={cat} value={cat} />
-                  ))}
-                </Picker>
+            
+            {showDatePicker && (
+              <DateTimePicker
+                value={date}
+                mode="date"
+                display="default"
+                onChange={onChangeDatePicker}
+              />
+            )}
+            
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Category</Text>
+              <View style={styles.categoriesGrid}>
+                {CATEGORIES.map((item) => (
+                  <CategoryPill
+                    key={item}
+                    category={item}
+                    selected={category === item}
+                    onPress={() => setCategory(item)}
+                    style={styles.categoryPill}
+                  />
+                ))}
               </View>
             </View>
           </View>
-
-          {/* Custom Numeric Keypad */}
-          <View style={styles.keypadContainer}>
-            <View style={styles.keypad}>
-              {keypadButtons.map((button) => (
-                <TouchableOpacity
-                  key={button}
-                  style={styles.keypadButton}
-                  onPress={() => handleNumericKeypad(button)}
-                >
-                  <Text style={styles.keypadButtonText}>{button}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
+          
           <View style={styles.buttonContainer}>
-            <TouchableOpacity 
-              style={styles.cancelButton}
-              onPress={handleCancel}
-            >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.saveButton}
+            <Button
+              title={isEditing ? 'Update Expense' : 'Save Expense'}
               onPress={handleSave}
-              disabled={loading}
-            >
-              <Text style={styles.saveButtonText}>
-                {loading ? 'Saving...' : 'Save Expense'}
-              </Text>
-            </TouchableOpacity>
+              loading={loading}
+            />
+            <Button
+              title="Cancel"
+              type="secondary"
+              onPress={handleCancel}
+              style={styles.cancelButton}
+            />
           </View>
         </ScrollView>
-      </SafeAreaView>
-    </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: theme.COLORS.background,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  closeButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  emptyView: {
-    width: 24,
-  },
-  contentContainer: {
+  keyboardAvoidingView: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    padding: theme.SPACING.lg,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: theme.SPACING.lg,
+  },
+  loadingText: {
+    marginTop: theme.SPACING.md,
+    fontSize: theme.FONT_SIZES.md,
+    color: theme.COLORS.text.secondary,
+    fontFamily: theme.FONTS.regular,
   },
   formContainer: {
-    padding: 16,
-    backgroundColor: '#f5f5f5',
+    marginBottom: theme.SPACING.xl,
   },
-  inputContainer: {
-    marginBottom: 16,
+  formGroup: {
+    marginBottom: theme.SPACING.md,
   },
-  inputLabel: {
-    fontSize: 14,
-    marginBottom: 8,
-    color: '#666',
-  },
-  textInput: {
-    backgroundColor: '#fff',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    fontSize: 16,
-  },
-  amountInput: {
-    backgroundColor: '#fff',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    fontSize: 18,
-    fontWeight: 'bold',
+  label: {
+    fontSize: theme.FONT_SIZES.sm,
+    fontFamily: theme.FONTS.medium,
+    color: theme.COLORS.text.primary,
+    marginBottom: theme.SPACING.xs,
   },
   datePickerButton: {
-    backgroundColor: '#fff',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ddd',
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    height: 52,
+    borderWidth: 1,
+    borderColor: theme.COLORS.lightGrey,
+    borderRadius: theme.BORDER_RADIUS.md,
+    paddingHorizontal: theme.SPACING.md,
+    backgroundColor: theme.COLORS.background,
+  },
+  dateIcon: {
+    marginRight: theme.SPACING.sm,
   },
   dateText: {
-    fontSize: 16,
-    color: '#333',
+    fontSize: theme.FONT_SIZES.md,
+    fontFamily: theme.FONTS.regular,
+    color: theme.COLORS.text.primary,
   },
-  pickerContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    overflow: 'hidden',
-  },
-  picker: {
-    height: 50,
-  },
-  keypadContainer: {
-    padding: 16,
-  },
-  keypad: {
+  categoriesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    marginTop: theme.SPACING.sm,
   },
-  keypadButton: {
-    width: '32%',
-    height: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    marginBottom: 8,
+  categoryPill: {
+    marginRight: theme.SPACING.sm,
+    marginBottom: theme.SPACING.sm,
   },
-  keypadButtonText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+  currencySymbol: {
+    fontSize: theme.FONT_SIZES.md,
+    fontFamily: theme.FONTS.medium,
+    color: theme.COLORS.text.secondary,
+    paddingHorizontal: theme.SPACING.sm,
   },
   buttonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 16,
-    marginBottom: 20,
+    marginTop: 'auto',
+    paddingTop: theme.SPACING.lg,
   },
   cancelButton: {
-    flex: 1,
-    padding: 15,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    marginRight: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    color: '#1a73e8',
-    fontWeight: '600',
-  },
-  saveButton: {
-    flex: 2,
-    padding: 15,
-    backgroundColor: '#1a73e8',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  saveButtonText: {
-    fontSize: 16,
-    color: '#fff',
-    fontWeight: '600',
+    marginTop: theme.SPACING.md,
   },
 });
 

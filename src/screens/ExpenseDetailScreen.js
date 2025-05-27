@@ -3,32 +3,47 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
-  Alert,
   ActivityIndicator,
+  Alert,
+  TouchableOpacity,
+  SafeAreaView,
+  ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { getExpenseById, deleteExpense } from '../api/expenseApi';
-import { formatCurrency, formatDate, formatTimestamp } from '../utils/formatUtils';
+import { Ionicons } from '@expo/vector-icons';
+import axios from 'axios';
+import { format } from 'date-fns';
+import { useFocusEffect } from '@react-navigation/native';
+import Header from '../../components/ui/Header';
+import Button from '../../components/ui/Button';
+import { CategoryPill } from '../../components/ui/CategoryPill';
+import theme from '../../constants/theme';
 
-const ExpenseDetailScreen = ({ route, navigation }) => {
-  const { id } = route.params;
+const ExpenseDetailScreen = ({ navigation, route }) => {
+  const { expenseId } = route.params;
   const [expense, setExpense] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
-    fetchExpenseDetails();
-  }, [id]);
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchExpenseDetails();
+    }, [expenseId])
+  );
 
   const fetchExpenseDetails = async () => {
     try {
       setLoading(true);
-      const data = await getExpenseById(id);
-      setExpense(data);
+      console.log('Fetching expense details for ID:', expenseId);
+      
+      const response = await axios.get(
+        `https://67ac71475853dfff53dab929.mockapi.io/api/v1/expenses/${expenseId}`
+      );
+      
+      console.log('Fetched expense details:', response.data);
+      setExpense(response.data);
     } catch (error) {
-      console.log('Error fetching expense details:', error);
-      Alert.alert('Error', 'Failed to fetch expense details');
+      console.error('Error fetching expense details:', error);
+      Alert.alert('Error', 'Failed to load expense details');
       navigation.goBack();
     } finally {
       setLoading(false);
@@ -36,108 +51,132 @@ const ExpenseDetailScreen = ({ route, navigation }) => {
   };
 
   const handleEdit = () => {
-    navigation.navigate('EditExpense', { id });
+    navigation.navigate('EditExpense', { expenseId: expense.id });
   };
 
   const handleDelete = () => {
     Alert.alert(
-      'Confirm Delete',
+      'Delete Expense',
       'Are you sure you want to delete this expense?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setLoading(true);
-              await deleteExpense(id);
-              Alert.alert('Success', 'Expense deleted successfully');
-              navigation.goBack();
-            } catch (error) {
-              console.log('Error deleting expense:', error);
-              Alert.alert('Error', 'Failed to delete expense');
-              setLoading(false);
-            }
-          }
-        },
+        { text: 'Delete', style: 'destructive', onPress: confirmDelete },
       ]
     );
   };
 
+  const confirmDelete = async () => {
+    try {
+      setDeleting(true);
+      await axios.delete(
+        `https://67ac71475853dfff53dab929.mockapi.io/api/v1/expenses/${expenseId}`
+      );
+      Alert.alert('Success', 'Expense deleted successfully');
+      navigation.goBack();
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      Alert.alert('Error', 'Failed to delete expense');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const formatDate = (dateString) => {
+    try {
+      return format(new Date(dateString), 'MMM dd, yyyy');
+    } catch (error) {
+      return 'Invalid date';
+    }
+  };
+
+  const formatAmount = (amount) => {
+    return Number(amount).toLocaleString('en-US');
+  };
+
   if (loading) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1a73e8" />
+      <SafeAreaView style={styles.container}>
+        <Header title="Expense Details" onBack={() => navigation.goBack()} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.COLORS.primary} />
+          <Text style={styles.loadingText}>Loading expense details...</Text>
+        </View>
       </SafeAreaView>
     );
   }
 
   if (!expense) {
     return (
-      <SafeAreaView style={styles.errorContainer}>
-        <Text style={styles.errorText}>Expense not found.</Text>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>Go Back</Text>
-        </TouchableOpacity>
+      <SafeAreaView style={styles.container}>
+        <Header title="Expense Details" onBack={() => navigation.goBack()} />
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle" size={60} color={theme.COLORS.error} />
+          <Text style={styles.errorText}>Expense not found</Text>
+        </View>
       </SafeAreaView>
     );
   }
 
+  const category = expense.description || "Others";
+
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton} 
-          onPress={() => navigation.goBack()}
-        >
-          <MaterialIcons name="arrow-back" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Expense Details</Text>
-        <View style={styles.emptyView} />
-      </View>
-
-      <View style={styles.detailsContainer}>
-        <View style={styles.detailItem}>
-          <Text style={styles.detailLabel}>Description</Text>
-          <Text style={styles.detailValue}>{expense.name}</Text>
+      <Header title="Expense Details" onBack={() => navigation.goBack()} />
+      
+      <ScrollView contentContainerStyle={styles.contentContainer}>
+        <View style={styles.amountContainer}>
+          <Text style={styles.currencyLabel}>RWF</Text>
+          <Text style={styles.amountValue}>{formatAmount(expense.amount)}</Text>
+          <Text style={styles.dateValue}>{formatDate(expense.date)}</Text>
         </View>
-
-        <View style={styles.detailItem}>
-          <Text style={styles.detailLabel}>Amount</Text>
-          <Text style={styles.detailValue}>{formatCurrency(expense.amount)}</Text>
+        
+        <View style={styles.detailsContainer}>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Category</Text>
+            <CategoryPill 
+              category={category} 
+              size="large"
+              style={styles.categoryPill}
+            />
+          </View>
+          
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Description</Text>
+            <Text style={styles.detailValue}>{expense.name || "No description"}</Text>
+          </View>
+          
+          <View style={styles.metaContainer}>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Created</Text>
+              <Text style={styles.metaValue}>{formatDate(expense.createdAt || expense.date)}</Text>
+            </View>
+            
+            {expense.updatedAt && expense.updatedAt !== expense.createdAt && (
+              <View style={styles.metaRow}>
+                <Text style={styles.metaLabel}>Last edited</Text>
+                <Text style={styles.metaValue}>{formatDate(expense.updatedAt)}</Text>
+              </View>
+            )}
+          </View>
         </View>
-
-        <View style={styles.detailItem}>
-          <Text style={styles.detailLabel}>Date</Text>
-          <Text style={styles.detailValue}>{formatDate(expense.date)}</Text>
+        
+        <View style={styles.actionsContainer}>
+          <Button
+            title="Edit"
+            type="outline"
+            onPress={handleEdit}
+            style={styles.actionButton}
+          />
+          <Button
+            title="Delete"
+            type="secondary"
+            onPress={handleDelete}
+            loading={deleting}
+            style={[styles.actionButton, styles.deleteButton]}
+            textStyle={styles.deleteButtonText}
+          />
         </View>
-
-        <View style={styles.detailItem}>
-          <Text style={styles.detailLabel}>Category</Text>
-          <Text style={styles.detailValue}>{expense.description}</Text>
-        </View>
-
-        <View style={styles.detailItem}>
-          <Text style={styles.detailLabel}>Created At</Text>
-          <Text style={styles.detailValue}>{formatTimestamp(expense.createdAt)}</Text>
-        </View>
-      </View>
-
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity 
-          style={styles.editButton}
-          onPress={handleEdit}
-        >
-          <Text style={styles.editButtonText}>Edit</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.deleteButton}
-          onPress={handleDelete}
-        >
-          <Text style={styles.deleteButtonText}>Delete</Text>
-        </TouchableOpacity>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -145,100 +184,117 @@ const ExpenseDetailScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: theme.COLORS.background,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    padding: theme.SPACING.lg,
+  },
+  loadingText: {
+    marginTop: theme.SPACING.md,
+    fontSize: theme.FONT_SIZES.md,
+    color: theme.COLORS.text.secondary,
+    fontFamily: theme.FONTS.regular,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 20,
+    padding: theme.SPACING.lg,
   },
   errorText: {
-    fontSize: 18,
-    color: '#666',
-    marginBottom: 20,
+    marginTop: theme.SPACING.md,
+    fontSize: theme.FONT_SIZES.lg,
+    color: theme.COLORS.error,
+    fontFamily: theme.FONTS.medium,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  contentContainer: {
+    padding: theme.SPACING.lg,
+    flexGrow: 1,
+  },
+  amountContainer: {
     alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    marginBottom: theme.SPACING.xl,
   },
-  backButton: {
-    padding: 4,
+  currencyLabel: {
+    fontSize: theme.FONT_SIZES.md,
+    fontFamily: theme.FONTS.medium,
+    color: theme.COLORS.text.secondary,
+    marginBottom: theme.SPACING.xs,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+  amountValue: {
+    fontSize: theme.FONT_SIZES.xxxl,
+    fontFamily: theme.FONTS.bold,
+    color: theme.COLORS.text.primary,
   },
-  emptyView: {
-    width: 24,
+  dateValue: {
+    fontSize: theme.FONT_SIZES.md,
+    fontFamily: theme.FONTS.regular,
+    color: theme.COLORS.text.secondary,
+    marginTop: theme.SPACING.sm,
   },
   detailsContainer: {
-    padding: 20,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    margin: 16,
+    backgroundColor: theme.COLORS.cardBackground,
+    borderRadius: theme.BORDER_RADIUS.lg,
+    padding: theme.SPACING.lg,
+    ...theme.SHADOWS.small,
+    marginBottom: theme.SPACING.lg,
   },
-  detailItem: {
-    marginBottom: 16,
+  detailRow: {
+    marginBottom: theme.SPACING.lg,
   },
   detailLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
+    fontSize: theme.FONT_SIZES.sm,
+    fontFamily: theme.FONTS.medium,
+    color: theme.COLORS.text.secondary,
+    marginBottom: theme.SPACING.xs,
   },
   detailValue: {
-    fontSize: 18,
-    color: '#333',
+    fontSize: theme.FONT_SIZES.md,
+    fontFamily: theme.FONTS.regular,
+    color: theme.COLORS.text.primary,
   },
-  buttonContainer: {
+  categoryPill: {
+    alignSelf: 'flex-start',
+    marginTop: theme.SPACING.xs,
+  },
+  metaContainer: {
+    borderTopWidth: 1,
+    borderTopColor: theme.COLORS.lightGrey,
+    paddingTop: theme.SPACING.md,
+  },
+  metaRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    padding: 16,
+    marginBottom: theme.SPACING.sm,
+  },
+  metaLabel: {
+    fontSize: theme.FONT_SIZES.sm,
+    fontFamily: theme.FONTS.regular,
+    color: theme.COLORS.text.secondary,
+  },
+  metaValue: {
+    fontSize: theme.FONT_SIZES.sm,
+    fontFamily: theme.FONTS.medium,
+    color: theme.COLORS.text.primary,
+  },
+  actionsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     marginTop: 'auto',
   },
-  editButton: {
+  actionButton: {
     flex: 1,
-    padding: 15,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  editButtonText: {
-    fontSize: 16,
-    color: '#333',
-    fontWeight: '600',
+    marginHorizontal: theme.SPACING.xs,
   },
   deleteButton: {
-    flex: 1,
-    padding: 15,
-    backgroundColor: '#1a73e8',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderColor: theme.COLORS.error,
   },
   deleteButtonText: {
-    fontSize: 16,
-    color: '#fff',
-    fontWeight: '600',
-  },
-  backButtonText: {
-    color: '#1a73e8',
-    fontSize: 16,
-    fontWeight: '600',
+    color: theme.COLORS.error,
   },
 });
 

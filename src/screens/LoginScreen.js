@@ -2,62 +2,217 @@ import React, { useState, useContext } from 'react';
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
   StyleSheet,
-  Alert,
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
+  TouchableOpacity,
   ScrollView,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
+import Button from '../../components/ui/Button';
+import Input from '../../components/ui/Input';
+import Logo from '../../assets/images/logo';
+import theme from '../../constants/theme';
+
+const TabButton = ({ title, active, onPress }) => (
+  <TouchableOpacity 
+    style={[styles.tabButton, active && styles.activeTabButton]}
+    onPress={onPress}
+  >
+    <Text style={[styles.tabButtonText, active && styles.activeTabButtonText]}>
+      {title}
+    </Text>
+  </TouchableOpacity>
+);
 
 const LoginScreen = ({ navigation }) => {
+  const [activeTab, setActiveTab] = useState('login');
+  
+  // Login state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const { login } = useContext(AuthContext);
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  
+  // Sign Up state
+  const [signUpEmail, setSignUpEmail] = useState('');
+  const [signUpPassword, setSignUpPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [signUpEmailError, setSignUpEmailError] = useState('');
+  const [signUpPasswordError, setSignUpPasswordError] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
 
-  const validateInputs = () => {
+  const { login, register, isLoading } = useContext(AuthContext);
+
+  const validateLoginForm = () => {
+    let isValid = true;
+    
+    // Reset errors
+    setEmailError('');
+    setPasswordError('');
+    
+    // Validate email
     if (!email.trim()) {
-      Alert.alert('Error', 'Please enter your email');
-      return false;
+      setEmailError('Email is required');
+      isValid = false;
+    } else if (!/\S+@\S+\.\S+/.test(email)) {
+      setEmailError('Please enter a valid email');
+      isValid = false;
     }
     
-    // Simple email validation
-    const emailRegex = /\S+@\S+\.\S+/;
-    if (!emailRegex.test(email)) {
-      Alert.alert('Error', 'Please enter a valid email address');
-      return false;
-    }
-    
+    // Validate password
     if (!password) {
-      Alert.alert('Error', 'Please enter your password');
-      return false;
+      setPasswordError('Password is required');
+      isValid = false;
     }
     
-    return true;
+    return isValid;
+  };
+
+  const validateSignUpForm = () => {
+    let isValid = true;
+    
+    // Reset errors
+    setSignUpEmailError('');
+    setSignUpPasswordError('');
+    setConfirmPasswordError('');
+    
+    // Validate email
+    if (!signUpEmail.trim()) {
+      setSignUpEmailError('Email is required');
+      isValid = false;
+    } else if (!/\S+@\S+\.\S+/.test(signUpEmail)) {
+      setSignUpEmailError('Please enter a valid email');
+      isValid = false;
+    }
+    
+    // Validate password
+    if (!signUpPassword) {
+      setSignUpPasswordError('Password is required');
+      isValid = false;
+    } else if (signUpPassword.length < 6) {
+      setSignUpPasswordError('Password must be at least 6 characters');
+      isValid = false;
+    }
+    
+    // Validate confirm password
+    if (signUpPassword !== confirmPassword) {
+      setConfirmPasswordError('Passwords do not match');
+      isValid = false;
+    }
+    
+    return isValid;
   };
 
   const handleLogin = async () => {
-    if (!validateInputs()) return;
-    
-    try {
-      setLoading(true);
+    if (validateLoginForm()) {
       await login(email, password);
-      // No need to navigate, AuthNavigator will handle it
-    } catch (error) {
-      console.log('Login error:', error);
-      Alert.alert('Login Failed', error.message || 'Invalid email or password');
-    } finally {
-      setLoading(false);
     }
   };
 
-  const handleSignUp = () => {
-    navigation.navigate('SignUp');
+  const handleSignUp = async () => {
+    if (validateSignUpForm()) {
+      await register(signUpEmail, signUpEmail, signUpPassword); // Using email as username
+    }
   };
+
+  const renderLoginTab = () => (
+    <View style={styles.tabContent}>
+      <Input
+        label="Email"
+        placeholder="Enter your email"
+        keyboardType="email-address"
+        value={email}
+        onChangeText={setEmail}
+        error={emailError}
+        leftIcon={<Ionicons name="mail-outline" size={20} color={theme.COLORS.text.light} />}
+      />
+      
+      <Input
+        label="Password"
+        placeholder="Enter your password"
+        value={password}
+        onChangeText={setPassword}
+        error={passwordError}
+        secure
+        leftIcon={<Ionicons name="lock-closed-outline" size={20} color={theme.COLORS.text.light} />}
+      />
+
+      <Button
+        title="Continue"
+        onPress={handleLogin}
+        loading={isLoading}
+        style={styles.submitButton}
+      />
+
+      <View style={styles.bottomTextContainer}>
+        <Text style={styles.bottomText}>
+          Don't have an account?{' '}
+          <Text
+            style={styles.textLink}
+            onPress={() => setActiveTab('signup')}
+          >
+            Sign up
+          </Text>
+        </Text>
+      </View>
+    </View>
+  );
+
+  const renderSignUpTab = () => (
+    <View style={styles.tabContent}>
+      <Input
+        label="Email"
+        placeholder="Enter your email"
+        keyboardType="email-address"
+        value={signUpEmail}
+        onChangeText={setSignUpEmail}
+        error={signUpEmailError}
+        leftIcon={<Ionicons name="mail-outline" size={20} color={theme.COLORS.text.light} />}
+      />
+      
+      <Input
+        label="Password"
+        placeholder="Choose a password"
+        value={signUpPassword}
+        onChangeText={setSignUpPassword}
+        error={signUpPasswordError}
+        secure
+        leftIcon={<Ionicons name="lock-closed-outline" size={20} color={theme.COLORS.text.light} />}
+      />
+      
+      <Input
+        label="Confirm Password"
+        placeholder="Confirm your password"
+        value={confirmPassword}
+        onChangeText={setConfirmPassword}
+        error={confirmPasswordError}
+        secure
+        leftIcon={<Ionicons name="lock-closed-outline" size={20} color={theme.COLORS.text.light} />}
+      />
+
+      <Button
+        title="Sign Up"
+        onPress={handleSignUp}
+        loading={isLoading}
+        style={styles.submitButton}
+      />
+
+      <View style={styles.bottomTextContainer}>
+        <Text style={styles.bottomText}>
+          Already have an account?{' '}
+          <Text
+            style={styles.textLink}
+            onPress={() => setActiveTab('login')}
+          >
+            Login
+          </Text>
+        </Text>
+      </View>
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -65,48 +220,30 @@ const LoginScreen = ({ navigation }) => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoidingView}
       >
-        <ScrollView contentContainerStyle={styles.scrollContainer}>
+        <ScrollView 
+          contentContainerStyle={styles.scrollContainer}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.logoContainer}>
+            <Logo size={90} />
+            <Text style={styles.title}>Kigali Finance</Text>
+          </View>
+          
           <View style={styles.formContainer}>
-            <Text style={styles.title}>Welcome to Kigali Finance</Text>
-            
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Email</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your email"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={email}
-                onChangeText={setEmail}
+            <View style={styles.tabsContainer}>
+              <TabButton
+                title="Login"
+                active={activeTab === 'login'}
+                onPress={() => setActiveTab('login')}
+              />
+              <TabButton
+                title="Sign Up"
+                active={activeTab === 'signup'}
+                onPress={() => setActiveTab('signup')}
               />
             </View>
 
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Password</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your password"
-                secureTextEntry
-                value={password}
-                onChangeText={setPassword}
-              />
-            </View>
-
-            <TouchableOpacity
-              style={styles.loginButton}
-              onPress={handleLogin}
-              disabled={loading}
-            >
-              <Text style={styles.loginButtonText}>
-                {loading ? 'Logging in...' : 'Login'}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.signupLink} onPress={handleSignUp}>
-              <Text style={styles.signupText}>
-                Don't have an account? <Text style={styles.signupBoldText}>Sign up</Text>
-              </Text>
-            </TouchableOpacity>
+            {activeTab === 'login' ? renderLoginTab() : renderSignUpTab()}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -117,70 +254,72 @@ const LoginScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: theme.COLORS.background,
   },
   keyboardAvoidingView: {
     flex: 1,
   },
   scrollContainer: {
     flexGrow: 1,
-    justifyContent: 'center',
-    padding: 20,
+    padding: theme.SPACING.lg,
   },
-  formContainer: {
-    width: '100%',
+  logoContainer: {
     alignItems: 'center',
+    marginTop: theme.SPACING.xl,
+    marginBottom: theme.SPACING.xl,
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 40,
-    textAlign: 'center',
-    color: '#333',
+    fontSize: theme.FONT_SIZES.xxl,
+    fontFamily: theme.FONTS.bold,
+    color: theme.COLORS.text.primary,
+    marginTop: theme.SPACING.md,
   },
-  inputContainer: {
-    width: '100%',
-    marginBottom: 20,
+  formContainer: {
+    backgroundColor: theme.COLORS.cardBackground,
+    borderRadius: theme.BORDER_RADIUS.lg,
+    ...theme.SHADOWS.medium,
+    overflow: 'hidden',
   },
-  inputLabel: {
-    fontSize: 14,
-    marginBottom: 8,
-    color: '#333',
+  tabsContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: theme.COLORS.lightGrey,
   },
-  input: {
-    width: '100%',
-    height: 50,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    paddingHorizontal: 15,
-    fontSize: 16,
-    backgroundColor: '#f9f9f9',
-  },
-  loginButton: {
-    width: '100%',
-    height: 50,
-    backgroundColor: '#1a73e8',
-    borderRadius: 8,
-    justifyContent: 'center',
+  tabButton: {
+    flex: 1,
+    paddingVertical: theme.SPACING.md,
     alignItems: 'center',
-    marginTop: 20,
   },
-  loginButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+  activeTabButton: {
+    borderBottomWidth: 2,
+    borderBottomColor: theme.COLORS.primary,
   },
-  signupLink: {
-    marginTop: 20,
+  tabButtonText: {
+    fontSize: theme.FONT_SIZES.md,
+    fontFamily: theme.FONTS.medium,
+    color: theme.COLORS.text.secondary,
   },
-  signupText: {
-    fontSize: 14,
-    color: '#666',
+  activeTabButtonText: {
+    color: theme.COLORS.primary,
   },
-  signupBoldText: {
-    color: '#1a73e8',
-    fontWeight: '600',
+  tabContent: {
+    padding: theme.SPACING.lg,
+  },
+  submitButton: {
+    marginTop: theme.SPACING.md,
+  },
+  bottomTextContainer: {
+    marginTop: theme.SPACING.xl,
+    alignItems: 'center',
+  },
+  bottomText: {
+    fontSize: theme.FONT_SIZES.sm,
+    fontFamily: theme.FONTS.regular,
+    color: theme.COLORS.text.secondary,
+  },
+  textLink: {
+    fontFamily: theme.FONTS.medium,
+    color: theme.COLORS.primary,
   },
 });
 

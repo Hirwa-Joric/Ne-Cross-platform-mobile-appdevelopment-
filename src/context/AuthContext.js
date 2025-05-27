@@ -1,140 +1,169 @@
 import React, { createContext, useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from 'react-native';
 
 export const AuthContext = createContext();
 
-const API_URL = 'https://67ac71475853dfff53dab929.mockapi.io/api/v1';
-
 export const AuthProvider = ({ children }) => {
+  const [isLoading, setIsLoading] = useState(false);
+  const [userToken, setUserToken] = useState(null);
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    // Check if user is logged in
-    const checkUserLoggedIn = async () => {
-      try {
-        const userData = await AsyncStorage.getItem('@user');
-        if (userData) {
-          setUser(JSON.parse(userData));
-        }
-      } catch (error) {
-        console.log('Error retrieving user data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const login = async (username, password) => {
+    if (!username || !password) {
+      Alert.alert('Error', 'Please enter both username and password');
+      return;
+    }
 
-    checkUserLoggedIn();
-  }, []);
+    setIsLoading(true);
 
-  const login = async (email, password) => {
     try {
-      setLoading(true);
-      // Get user with matching email
-      const response = await axios.get(`${API_URL}/users?username=${email}`);
-      
-      if (response.data.length === 0) {
-        throw new Error('User not found');
+      // Check if user exists
+      const response = await axios.get(
+        'https://67ac71475853dfff53dab929.mockapi.io/api/v1/users',
+        {
+          params: { username }
+        }
+      );
+
+      const users = response.data;
+      const user = users.find(u => u.username === username && u.password === password);
+
+      if (user) {
+        // Create a user object with necessary fields but exclude sensitive data like password
+        const userData = {
+          id: user.id,
+          username: user.username,
+          email: user.email || '',
+          fullName: user.fullName || username,
+        };
+
+        // Store user data in AsyncStorage
+        await AsyncStorage.setItem('@user', JSON.stringify(userData));
+        
+        // For secure operations, store the token in SecureStore
+        await SecureStore.setItemAsync('userToken', user.id);
+        
+        // Update context state
+        setUser(userData);
+        setUserToken(user.id);
+      } else {
+        Alert.alert('Error', 'Invalid username or password');
       }
-
-      const userData = response.data[0];
-      
-      // Simple password check - in a real app, this should be done on server with proper encryption
-      if (userData.password !== password) {
-        throw new Error('Invalid password');
-      }
-
-      // Remove password from stored user data for security
-      const userToStore = {
-        id: userData.id,
-        username: userData.username,
-        createdAt: userData.createdAt
-      };
-
-      await AsyncStorage.setItem('@user', JSON.stringify(userToStore));
-      setUser(userToStore);
-      return userToStore;
     } catch (error) {
-      throw error;
+      console.log('Login error', error);
+      Alert.alert('Error', 'An error occurred during login. Please try again.');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  const register = async (email, password) => {
+  const register = async (username, email, password) => {
+    if (!username || !password) {
+      Alert.alert('Error', 'Please enter both username and password');
+      return;
+    }
+
+    setIsLoading(true);
+
     try {
-      setLoading(true);
-      // Skip checking if user exists - MockAPI doesn't support query by username
-      // const checkUser = await axios.get(`${API_URL}/users?username=${email}`);
-      // 
-      // if (checkUser.data.length > 0) {
-      //   throw new Error('User already exists');
-      // }
-
-      console.log('Attempting to register user with:', { username: email, password: '***' });
-      
-      // Register new user with explicit headers and timeout
-      const response = await axios({
-        method: 'post',
-        url: `${API_URL}/users`,
-        data: {
-          username: email,
-          password: password,
-        },
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        timeout: 10000 // 10 seconds timeout
-      });
-      
-      console.log('Registration response:', response.status, response.statusText);
-
-      // Remove password from stored user data for security
-      const userToStore = {
-        id: response.data.id,
-        username: response.data.username,
-        createdAt: response.data.createdAt
-      };
-
-      await AsyncStorage.setItem('@user', JSON.stringify(userToStore));
-      setUser(userToStore);
-      return userToStore;
-    } catch (error) {
-      console.log('Registration error details:', {
-        message: error.message,
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        config: {
-          url: error.config?.url,
-          method: error.config?.method
+      // Check if username already exists
+      const checkResponse = await axios.get(
+        'https://67ac71475853dfff53dab929.mockapi.io/api/v1/users',
+        {
+          params: { username }
         }
-      });
-      throw error;
+      );
+
+      if (checkResponse.data.length > 0) {
+        Alert.alert('Error', 'Username already exists');
+        setIsLoading(false);
+        return;
+      }
+
+      // Create new user
+      const response = await axios.post(
+        'https://67ac71475853dfff53dab929.mockapi.io/api/v1/users',
+        {
+          username,
+          email,
+          password,
+          fullName: username, // Use username as default fullName
+        }
+      );
+
+      if (response.data) {
+        const userData = {
+          id: response.data.id,
+          username: response.data.username,
+          email: response.data.email || '',
+          fullName: response.data.fullName || username,
+        };
+
+        await AsyncStorage.setItem('@user', JSON.stringify(userData));
+        await SecureStore.setItemAsync('userToken', response.data.id);
+        
+        setUser(userData);
+        setUserToken(response.data.id);
+        
+        Alert.alert('Success', 'Registration successful');
+      }
+    } catch (error) {
+      console.log('Registration error', error);
+      Alert.alert('Error', 'An error occurred during registration. Please try again.');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   const logout = async () => {
+    setIsLoading(true);
     try {
+      await SecureStore.deleteItemAsync('userToken');
       await AsyncStorage.removeItem('@user');
+      setUserToken(null);
       setUser(null);
     } catch (error) {
-      console.log('Error logging out:', error);
+      console.log('Logout error', error);
+    } finally {
+      setIsLoading(false);
     }
   };
+
+  const isLoggedIn = async () => {
+    try {
+      setIsLoading(true);
+      let userToken = await SecureStore.getItemAsync('userToken');
+      let userData = await AsyncStorage.getItem('@user');
+      
+      if (userToken && userData) {
+        setUserToken(userToken);
+        setUser(JSON.parse(userData));
+      }
+    } catch (error) {
+      console.log('isLoggedIn error', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    isLoggedIn();
+  }, []);
 
   return (
     <AuthContext.Provider
       value={{
-        user,
-        loading,
         login,
         register,
         logout,
-      }}>
+        isLoading,
+        userToken,
+        user,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
