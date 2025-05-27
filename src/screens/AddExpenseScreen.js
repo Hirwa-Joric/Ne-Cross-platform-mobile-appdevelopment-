@@ -16,6 +16,9 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import axios from 'axios';
 import { format } from 'date-fns';
 import { AuthContext } from '../context/AuthContext';
+import { getUserBudgets } from '../api/budgetApi';
+import { getAllExpenses } from '../api/expenseApi';
+import { scheduleBudgetNotification } from '../utils/notificationManager';
 import Header from '../../components/ui/Header';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
@@ -106,18 +109,36 @@ const AddExpenseScreen = ({ navigation, route }) => {
     if (!description.trim()) {
       setDescriptionError('Description is required');
       isValid = false;
+    } else if (description.trim().length > 100) {
+      setDescriptionError('Description cannot exceed 100 characters');
+      isValid = false;
     }
     
     // Validate amount
     if (!amount) {
       setAmountError('Amount is required');
       isValid = false;
-    } else if (isNaN(amount) || Number(amount) <= 0) {
-      setAmountError('Please enter a valid amount');
+    } else if (isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+      setAmountError('Please enter a valid positive amount');
       isValid = false;
     }
     
     return isValid;
+  };
+
+  const handleAmountChange = (text) => {
+    // Only allow numeric input with a single decimal point
+    // Remove any non-numeric characters except for one decimal point
+    const filtered = text.replace(/[^0-9.]/g, '');
+    
+    // Ensure only one decimal point
+    const parts = filtered.split('.');
+    if (parts.length > 2) {
+      // More than one decimal point, keep only the first one
+      setAmount(`${parts[0]}.${parts[1]}`);
+    } else {
+      setAmount(filtered);
+    }
   };
 
   const handleSave = async () => {
@@ -136,39 +157,114 @@ const AddExpenseScreen = ({ navigation, route }) => {
       
       console.log('Saving expense data:', expenseData);
       
+      let response;
+      
       if (isEditing) {
         // Update existing expense
-        const response = await axios.put(
+        response = await axios.put(
           `https://67ac71475853dfff53dab929.mockapi.io/api/v1/expenses/${expenseId}`,
           expenseData
         );
         console.log('Updated expense:', response.data);
         
-        // Successfully updated, now navigate back
-        Alert.alert(
-          'Success', 
-          'Expense updated successfully',
-          [{ text: 'OK', onPress: () => navigation.goBack() }]
-        );
+        // Successfully updated
+        checkBudgetExceedingAndNotify().then(() => {
+          Alert.alert(
+            'Success', 
+            'Expense updated successfully',
+            [{ text: 'OK', onPress: () => navigation.goBack() }]
+          );
+        });
       } else {
         // Create new expense
-        const response = await axios.post(
+        response = await axios.post(
           'https://67ac71475853dfff53dab929.mockapi.io/api/v1/expenses',
           expenseData
         );
         console.log('Created expense:', response.data);
         
-        // Successfully created, now navigate back
-        Alert.alert(
-          'Success', 
-          'Expense added successfully',
-          [{ text: 'OK', onPress: () => navigation.goBack() }]
-        );
+        // Successfully created
+        checkBudgetExceedingAndNotify().then(() => {
+          Alert.alert(
+            'Success', 
+            'Expense added successfully',
+            [{ text: 'OK', onPress: () => navigation.goBack() }]
+          );
+        });
       }
     } catch (error) {
       console.error('Error saving expense:', error);
       Alert.alert('Error', `Failed to ${isEditing ? 'update' : 'add'} expense`);
       setLoading(false);
+    }
+  };
+
+  // Check budget limits and show notifications if needed
+  const checkBudgetExceedingAndNotify = async () => {
+    try {
+      // Get current month in yyyy-MM format
+      const currentDate = new Date();
+      const currentMonthYear = format(currentDate, 'yyyy-MM');
+      
+      // Get all budgets for the current month
+      const budgets = await getUserBudgets(currentMonthYear);
+      
+      // If no budgets, no need to check
+      if (budgets.length === 0) {
+        return;
+      }
+      
+      // Get all expenses
+      const expenses = await getAllExpenses();
+      
+      // Filter expenses for current month only
+      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+      
+      const currentMonthExpenses = expenses.filter(expense => {
+        const expenseDate = new Date(expense.date);
+        return expenseDate >= startOfMonth && expenseDate <= endOfMonth;
+      });
+      
+      // Check each budget
+      for (const budget of budgets) {
+        // Find expenses for this category
+        const categoryExpenses = currentMonthExpenses.filter(expense => 
+          expense.description === budget.category
+        );
+        
+        // Calculate total spent for this category
+        const totalSpent = categoryExpenses.reduce((sum, expense) => 
+          sum + parseFloat(expense.amount || 0), 0
+        );
+        
+        // Get budget amount
+        const budgetAmount = parseFloat(budget.amount);
+        
+        // Calculate percentage spent
+        const percentageSpent = (totalSpent / budgetAmount) * 100;
+        
+        console.log(`Category: ${budget.category}, Spent: ${totalSpent}, Budget: ${budgetAmount}, Percentage: ${percentageSpent}%`);
+        
+        // Check if budget exceeded
+        if (percentageSpent >= 100) {
+          await scheduleBudgetNotification(
+            `Budget Exceeded: ${budget.category}`,
+            `You've spent ${totalSpent.toLocaleString()} RWF of your ${budgetAmount.toLocaleString()} RWF budget for ${budget.category}.`
+          );
+          console.log(`Budget notification sent for ${budget.category}`);
+        } 
+        // Check if near budget limit
+        else if (percentageSpent >= 80) {
+          await scheduleBudgetNotification(
+            `Budget Alert: ${budget.category}`,
+            `You've spent ${percentageSpent.toFixed(0)}% of your ${budget.category} budget.`
+          );
+          console.log(`Budget warning sent for ${budget.category}`);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking budget limits:', error);
     }
   };
 
@@ -236,7 +332,7 @@ const AddExpenseScreen = ({ navigation, route }) => {
               label="Amount"
               placeholder="0"
               value={amount}
-              onChangeText={setAmount}
+              onChangeText={handleAmountChange}
               keyboardType="numeric"
               error={amountError}
               leftIcon={

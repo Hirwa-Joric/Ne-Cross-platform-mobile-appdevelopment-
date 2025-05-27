@@ -3,6 +3,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import ExpensesScreen from '../screens/ExpensesScreen';
 import AddExpenseScreen from '../screens/AddExpenseScreen';
 import ExpenseDetailScreen from '../screens/ExpenseDetailScreen';
+import BudgetsScreen from '../screens/BudgetsScreen';
+import AddEditBudgetScreen from '../screens/AddEditBudgetScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -33,6 +35,20 @@ const MainNavigator = () => {
       <Stack.Screen 
         name="ExpenseDetail" 
         component={ExpenseDetailScreen}
+        options={{
+          headerShown: false // Custom header in component
+        }}
+      />
+      <Stack.Screen 
+        name="Budgets" 
+        component={BudgetsScreen}
+        options={{
+          headerShown: false // Custom header in component
+        }}
+      />
+      <Stack.Screen 
+        name="AddEditBudget" 
+        component={AddEditBudgetScreen}
         options={{
           headerShown: false // Custom header in component
         }}

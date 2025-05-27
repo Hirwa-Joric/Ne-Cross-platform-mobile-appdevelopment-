@@ -12,6 +12,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
+import Input from '../../components/ui/Input';
 
 const SignUpScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
@@ -19,34 +20,70 @@ const SignUpScreen = ({ navigation }) => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { register } = useContext(AuthContext);
+  
+  // Add error state variables for form validation
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
 
-  const validateInputs = () => {
+  const validateSignUpForm = () => {
+    let isValid = true;
+    
+    // Reset errors
+    setEmailError('');
+    setPasswordError('');
+    setConfirmPasswordError('');
+    
+    // Validate email
     if (!email.trim()) {
-      Alert.alert('Error', 'Please enter your email');
-      return false;
+      setEmailError('Email is required');
+      isValid = false;
+    } else {
+      const emailRegex = /\S+@\S+\.\S+/;
+      if (!emailRegex.test(email)) {
+        setEmailError('Please enter a valid email address');
+        isValid = false;
+      }
     }
     
-    const emailRegex = /\S+@\S+\.\S+/;
-    if (!emailRegex.test(email)) {
-      Alert.alert('Error', 'Please enter a valid email address');
-      return false;
-    }
-    
+    // Validate password with complexity requirements
     if (!password) {
-      Alert.alert('Error', 'Please enter your password');
-      return false;
+      setPasswordError('Password is required');
+      isValid = false;
+    } else {
+      // Password complexity validation
+      const hasMinLength = password.length >= 8;
+      const hasUpperCase = /[A-Z]/.test(password);
+      const hasLowerCase = /[a-z]/.test(password);
+      const hasNumber = /[0-9]/.test(password);
+      const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+/.test(password);
+      
+      let complexityErrors = [];
+      
+      if (!hasMinLength) complexityErrors.push('be at least 8 characters long');
+      if (!hasUpperCase) complexityErrors.push('include at least one uppercase letter');
+      if (!hasLowerCase) complexityErrors.push('include at least one lowercase letter');
+      if (!hasNumber) complexityErrors.push('include at least one number');
+      // Optional special character validation
+      // if (!hasSpecialChar) complexityErrors.push('include at least one special character');
+      
+      if (complexityErrors.length > 0) {
+        setPasswordError(`Password must ${complexityErrors.join(', ')}`);
+        isValid = false;
+      }
     }
     
+    // Validate password confirmation
     if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
-      return false;
+      setConfirmPasswordError('Passwords do not match');
+      isValid = false;
     }
     
-    return true;
+    return isValid;
   };
 
   const handleSignUp = async () => {
-    if (!validateInputs()) return;
+    if (!validateSignUpForm()) return;
     
     try {
       setLoading(true);
@@ -93,36 +130,36 @@ const SignUpScreen = ({ navigation }) => {
             <Text style={styles.title}>Create Account</Text>
             
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Email</Text>
-              <TextInput
-                style={styles.input}
+              <Input
+                label="Email"
                 placeholder="Enter your email"
                 keyboardType="email-address"
                 autoCapitalize="none"
                 value={email}
                 onChangeText={setEmail}
+                error={emailError}
               />
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Password</Text>
-              <TextInput
-                style={styles.input}
+              <Input
+                label="Password"
                 placeholder="Enter your password"
-                secureTextEntry
+                secure
                 value={password}
                 onChangeText={setPassword}
+                error={passwordError}
               />
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Confirm Password</Text>
-              <TextInput
-                style={styles.input}
+              <Input
+                label="Confirm Password"
                 placeholder="Confirm your password"
-                secureTextEntry
+                secure
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
+                error={confirmPasswordError}
               />
             </View>
 

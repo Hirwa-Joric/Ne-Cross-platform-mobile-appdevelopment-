@@ -10,6 +10,7 @@ import {
   Inter_600SemiBold,
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
+import { registerForPushNotificationsAsync } from './src/utils/notificationManager';
 
 import AuthNavigator from './src/navigation/AuthNavigator';
 import { AuthProvider } from './src/context/AuthContext';
@@ -31,6 +32,9 @@ function App() {
           Inter_600SemiBold, 
           Inter_700Bold,
         });
+        
+        // Initialize notifications
+        await registerForPushNotificationsAsync();
       } catch (e) {
         console.warn(e);
       } finally {

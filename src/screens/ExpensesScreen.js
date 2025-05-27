@@ -10,6 +10,8 @@ import {
   SafeAreaView,
   StatusBar,
   Alert,
+  Dimensions,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
@@ -19,14 +21,23 @@ import Card from '../../components/ui/Card';
 import EmptyState from '../../assets/images/empty-state';
 import theme from '../../constants/theme';
 import { CategoryIcon, CATEGORY_CONFIG } from '../../components/ui/CategoryPill';
+import SpendingChart from '../components/SpendingChart';
+import { registerForPushNotificationsAsync } from '../utils/notificationManager';
 
 const ExpensesScreen = ({ navigation }) => {
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [totalAmount, setTotalAmount] = useState(0);
+  const [spendingByCategory, setSpendingByCategory] = useState([]);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   
   const { user, logout } = useContext(AuthContext);
+  
+  // Request notification permissions when the app loads
+  useEffect(() => {
+    registerForPushNotificationsAsync();
+  }, []);
 
   const fetchExpenses = async () => {
     try {
@@ -74,6 +85,27 @@ const ExpensesScreen = ({ navigation }) => {
       );
       
       setTotalAmount(total);
+      
+      // Calculate spending by category for the chart
+      const categoryMap = {};
+      monthlyExpenses.forEach(expense => {
+        const category = expense.description || 'Others'; // Category is stored in description
+        if (!categoryMap[category]) {
+          categoryMap[category] = 0;
+        }
+        categoryMap[category] += Number(expense.amount || 0);
+      });
+      
+      // Convert to array format for the chart component
+      const spendingData = Object.keys(categoryMap).map(category => ({
+        category,
+        amount: categoryMap[category]
+      }));
+      
+      // Sort by amount (highest first)
+      spendingData.sort((a, b) => b.amount - a.amount);
+      
+      setSpendingByCategory(spendingData);
     } catch (error) {
       console.error('Error fetching expenses:', error);
     } finally {
@@ -98,6 +130,10 @@ const ExpensesScreen = ({ navigation }) => {
     navigation.navigate('AddExpense');
   };
 
+  const handleBudgetsPress = () => {
+    navigation.navigate('Budgets');
+  };
+
   const handleExpensePress = (expense) => {
     navigation.navigate('ExpenseDetail', { expenseId: expense.id });
   };
@@ -113,16 +149,55 @@ const ExpensesScreen = ({ navigation }) => {
     return Number(amount).toLocaleString('en-US');
   };
 
+  // Format username to only show part before @
+  const getDisplayName = () => {
+    if (!user) return 'User';
+    
+    // If user has a full name, extract just first name
+    if (user.fullName) {
+      const firstName = user.fullName.split(' ')[0];
+      return firstName;
+    }
+    
+    // If using email, always extract just the username part before @
+    if (user.email) {
+      // Make sure to split by @ and only take the first part
+      const username = user.email.split('@')[0];
+      
+      // Capitalize the first letter for better presentation
+      if (username && username.length > 0) {
+        return username.charAt(0).toUpperCase() + username.slice(1);
+      }
+    }
+    
+    // If username exists and it's not the same as email (contains @), use it
+    if (user.username && user.username.includes('@')) {
+      const username = user.username.split('@')[0];
+      return username.charAt(0).toUpperCase() + username.slice(1);
+    } else if (user.username) {
+      return user.username.charAt(0).toUpperCase() + user.username.slice(1);
+    }
+    
+    return 'User';
+  };
+
   const getUserInitials = () => {
-    if (!user || !user.fullName) return '?';
+    if (!user) return '?';
     
-    const nameParts = user.fullName.split(' ');
-    if (nameParts.length === 1) return nameParts[0].charAt(0).toUpperCase();
+    if (user.fullName) {
+      const nameParts = user.fullName.split(' ');
+      if (nameParts.length === 1) return nameParts[0].charAt(0).toUpperCase();
+      
+      return (
+        nameParts[0].charAt(0).toUpperCase() + 
+        nameParts[nameParts.length - 1].charAt(0).toUpperCase()
+      );
+    } else if (user.email) {
+      // If no fullName, use first letter of email
+      return user.email.charAt(0).toUpperCase();
+    }
     
-    return (
-      nameParts[0].charAt(0).toUpperCase() + 
-      nameParts[nameParts.length - 1].charAt(0).toUpperCase()
-    );
+    return '?';
   };
 
   const handleLogout = () => {
@@ -133,6 +208,7 @@ const ExpensesScreen = ({ navigation }) => {
         { text: 'Cancel', style: 'cancel' },
         { text: 'Logout', onPress: async () => {
           try {
+            setShowUserMenu(false);
             await logout();
           } catch (error) {
             console.error('Error logging out:', error);
@@ -237,21 +313,56 @@ const ExpensesScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={theme.COLORS.background} />
       
+      {/* User Menu Modal */}
+      <Modal
+        visible={showUserMenu}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowUserMenu(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowUserMenu(false)}
+        >
+          <View style={styles.userMenuContainer}>
+            <TouchableOpacity 
+              style={styles.userMenuItem}
+              onPress={handleLogout}
+            >
+              <Ionicons name="log-out-outline" size={20} color={theme.COLORS.text.primary} />
+              <Text style={styles.userMenuItemText}>Sign Out</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+      
       <View style={styles.header}>
         <View>
           <Text style={styles.welcomeText}>Welcome,</Text>
-          <Text style={styles.userName}>{user?.fullName || 'User'}</Text>
+          <Text 
+            style={styles.userName}
+            numberOfLines={1}
+          >
+            {user ? 
+              (user.username && user.username.split('@')[0]) || 
+              (user.email && user.email.split('@')[0]) || 
+              (user.fullName && user.fullName.split(' ')[0]) || 
+              'User' + (user.id ? ' #' + user.id : '')
+              : 'Guest'}
+          </Text>
         </View>
         
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Ionicons name="log-out-outline" size={24} color={theme.COLORS.text.secondary} />
+          <TouchableOpacity style={styles.budgetButton} onPress={handleBudgetsPress}>
+            <Ionicons name="wallet-outline" size={24} color={theme.COLORS.primary} />
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.profileButton}>
-            <View style={styles.profileAvatar}>
-              <Text style={styles.profileInitials}>{getUserInitials()}</Text>
-            </View>
+          <TouchableOpacity 
+            style={styles.userAvatar}
+            onPress={() => setShowUserMenu(true)}
+          >
+            <Text style={styles.userInitials}>{getUserInitials()}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -260,6 +371,17 @@ const ExpensesScreen = ({ navigation }) => {
         <Text style={styles.totalExpensesTitle}>This Month's Total Expenses</Text>
         <Text style={styles.totalExpensesAmount}>RWF {formatAmount(totalAmount)}</Text>
       </Card>
+      
+      {/* Spending Chart */}
+      {!loading && spendingByCategory.length > 0 && (
+        <Card style={styles.chartCard}>
+          <SpendingChart
+            data={spendingByCategory}
+            width={Dimensions.get('window').width - 48}
+            height={320}
+          />
+        </Card>
+      )}
 
       <View style={styles.expensesListHeader}>
         <Text style={styles.expensesListTitle}>Recent Expenses</Text>
@@ -334,30 +456,31 @@ const styles = StyleSheet.create({
     fontSize: theme.FONT_SIZES.xl,
     fontFamily: theme.FONTS.bold,
     color: theme.COLORS.text.primary,
+    maxWidth: 200, // Limit width to prevent layout issues
+    marginTop: 2, // Add a bit more space from the welcome text
+    flexShrink: 1,
+    numberOfLines: 1,
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  logoutButton: {
-    padding: theme.SPACING.xs,
-    marginRight: theme.SPACING.sm,
+  budgetButton: {
+    padding: 8,
+    marginRight: 12,
   },
-  profileButton: {
-    padding: theme.SPACING.xs,
-  },
-  profileAvatar: {
+  userAvatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: theme.COLORS.primary,
+    backgroundColor: theme.COLORS.primary + '20',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  profileInitials: {
-    color: 'white',
+  userInitials: {
+    color: theme.COLORS.primary,
     fontSize: theme.FONT_SIZES.md,
-    fontFamily: theme.FONTS.semiBold,
+    fontFamily: theme.FONTS.semibold,
   },
   totalExpensesCard: {
     marginHorizontal: theme.SPACING.lg,
@@ -375,6 +498,12 @@ const styles = StyleSheet.create({
     fontSize: theme.FONT_SIZES.xxxl,
     fontFamily: theme.FONTS.bold,
     color: 'white',
+  },
+  chartCard: {
+    marginHorizontal: theme.SPACING.lg,
+    marginTop: theme.SPACING.md,
+    padding: 0,
+    overflow: 'hidden',
   },
   expensesListHeader: {
     flexDirection: 'row',
@@ -471,6 +600,33 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     ...theme.SHADOWS.large,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+  },
+  userMenuContainer: {
+    position: 'absolute',
+    top: 90,
+    right: theme.SPACING.lg,
+    backgroundColor: 'white',
+    borderRadius: theme.BORDER_RADIUS.md,
+    width: 180,
+    ...theme.SHADOWS.medium,
+    overflow: 'hidden',
+  },
+  userMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: theme.SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.COLORS.lightGrey,
+  },
+  userMenuItemText: {
+    marginLeft: theme.SPACING.sm,
+    fontSize: theme.FONT_SIZES.md,
+    fontFamily: theme.FONTS.medium,
+    color: theme.COLORS.text.primary,
   },
 });
 
