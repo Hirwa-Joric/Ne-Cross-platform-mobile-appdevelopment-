@@ -14,6 +14,7 @@ import {
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import axios from 'axios';
 import { useFocusEffect } from '@react-navigation/native';
 import { AuthContext } from '../context/AuthContext';
@@ -231,15 +232,24 @@ const ExpensesScreen = ({ navigation }) => {
     
     // Get the icon config
     const iconConfig = CATEGORY_CONFIG[bestMatchCategory] || CATEGORY_CONFIG.Others;
+
+    // Create gradient colors from the category color
+    const baseColor = iconConfig.color;
+    const lightColor = baseColor + '80'; // 50% opacity version
     
     return (
       <TouchableOpacity
         style={styles.expenseItem}
         onPress={() => handleExpensePress(item)}
       >
-        <View style={[styles.categoryIcon, { backgroundColor: iconConfig.color + '20' }]}>
-          <CategoryIcon category={bestMatchCategory} size={24} color={iconConfig.color} />
-        </View>
+        <LinearGradient
+          colors={[baseColor, lightColor]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.categoryIcon]}
+        >
+          <CategoryIcon category={bestMatchCategory} size={24} color={'white'} />
+        </LinearGradient>
         
         <View style={styles.expenseDetails}>
           <Text style={styles.expenseName} numberOfLines={1}>
@@ -310,134 +320,172 @@ const ExpensesScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={theme.COLORS.background} />
-      
-      {/* User Menu Modal */}
-      <Modal
-        visible={showUserMenu}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowUserMenu(false)}
+    <SafeAreaView style={styles.safeArea}>
+      <LinearGradient
+        colors={['#F7F9FC', '#F0F4FA']}
+        style={styles.container}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
       >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowUserMenu(false)}
+        <StatusBar barStyle="dark-content" backgroundColor={theme.COLORS.background} />
+        
+        {/* User Menu Modal */}
+        <Modal
+          visible={showUserMenu}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowUserMenu(false)}
         >
-          <View style={styles.userMenuContainer}>
-            <TouchableOpacity 
-              style={styles.userMenuItem}
-              onPress={handleLogout}
+          <TouchableOpacity 
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowUserMenu(false)}
+          >
+            <View style={styles.userMenuContainer}>
+              <TouchableOpacity 
+                style={styles.userMenuItem}
+                onPress={handleLogout}
+              >
+                <Ionicons name="log-out-outline" size={20} color={theme.COLORS.text.primary} />
+                <Text style={styles.userMenuItemText}>Sign Out</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+        
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.welcomeText}>Welcome,</Text>
+            <Text 
+              style={styles.userName}
+              numberOfLines={1}
             >
-              <Ionicons name="log-out-outline" size={20} color={theme.COLORS.text.primary} />
-              <Text style={styles.userMenuItemText}>Sign Out</Text>
+              {user ? 
+                (user.username && user.username.split('@')[0]) || 
+                (user.email && user.email.split('@')[0]) || 
+                (user.fullName && user.fullName.split(' ')[0]) || 
+                'User' + (user.id ? ' #' + user.id : '')
+                : 'Guest'}
+            </Text>
+          </View>
+          
+          <View style={styles.headerActions}>
+            <TouchableOpacity onPress={handleBudgetsPress}>
+              <LinearGradient
+                colors={[theme.COLORS.accent1, theme.COLORS.primary]}
+                style={styles.budgetButton}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Ionicons name="wallet-outline" size={24} color="white" />
+              </LinearGradient>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              onPress={() => setShowUserMenu(true)}
+            >
+              <LinearGradient
+                colors={theme.GRADIENTS.avatar}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.userAvatar}
+              >
+                <Text style={styles.userInitials}>{getUserInitials()}</Text>
+              </LinearGradient>
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-      </Modal>
-      
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.welcomeText}>Welcome,</Text>
-          <Text 
-            style={styles.userName}
-            numberOfLines={1}
-          >
-            {user ? 
-              (user.username && user.username.split('@')[0]) || 
-              (user.email && user.email.split('@')[0]) || 
-              (user.fullName && user.fullName.split(' ')[0]) || 
-              'User' + (user.id ? ' #' + user.id : '')
-              : 'Guest'}
-          </Text>
         </View>
         
-        <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.budgetButton} onPress={handleBudgetsPress}>
-            <Ionicons name="wallet-outline" size={24} color={theme.COLORS.primary} />
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.userAvatar}
-            onPress={() => setShowUserMenu(true)}
-          >
-            <Text style={styles.userInitials}>{getUserInitials()}</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-      
-      <Card style={styles.totalExpensesCard}>
-        <Text style={styles.totalExpensesTitle}>This Month's Total Expenses</Text>
-        <Text style={styles.totalExpensesAmount}>RWF {formatAmount(totalAmount)}</Text>
-      </Card>
-      
-      {/* Spending Chart */}
-      {!loading && spendingByCategory.length > 0 && (
-        <Card style={styles.chartCard}>
-          <SpendingChart
-            data={spendingByCategory}
-            width={Dimensions.get('window').width - 48}
-            height={320}
-          />
+        <Card 
+          gradient={true} 
+          gradientColors={theme.GRADIENTS.expensesCard} 
+          style={styles.totalExpensesCard}
+        >
+          <Text style={styles.totalExpensesTitle}>This Month's Total Expenses</Text>
+          <Text style={styles.totalExpensesAmount}>RWF {formatAmount(totalAmount)}</Text>
         </Card>
-      )}
-
-      <View style={styles.expensesListHeader}>
-        <Text style={styles.expensesListTitle}>Recent Expenses</Text>
-        <TouchableOpacity onPress={handleAddExpense}>
-          <Ionicons name="add" size={24} color={theme.COLORS.primary} />
-        </TouchableOpacity>
-      </View>
-      
-      {loading && !refreshing ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.COLORS.primary} />
-        </View>
-      ) : (
-        <>
-          {expenses.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <EmptyState size={180} />
-              <Text style={styles.emptyText}>No expenses yet</Text>
-              <Text style={styles.emptySubText}>
-                Tap the + button to add your first expense
-              </Text>
-            </View>
-          ) : (
-            <FlatList
-              data={expenses}
-              renderItem={renderExpenseItem}
-              keyExtractor={item => item.id}
-              contentContainerStyle={styles.expensesList}
-              showsVerticalScrollIndicator={false}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={onRefresh}
-                  colors={[theme.COLORS.primary]}
-                  tintColor={theme.COLORS.primary}
-                />
-              }
+        
+        {/* Spending Chart */}
+        {!loading && spendingByCategory.length > 0 && (
+          <Card 
+            gradient={true} 
+            gradientColors={theme.GRADIENTS.lightCard} 
+            style={styles.chartCard}
+          >
+            <SpendingChart
+              data={spendingByCategory}
+              width={Dimensions.get('window').width - 48}
+              height={320}
             />
-          )}
-        </>
-      )}
-      
-      <TouchableOpacity
-        style={styles.addButton}
-        onPress={handleAddExpense}
-      >
-        <Ionicons name="add" size={28} color="white" />
-      </TouchableOpacity>
+          </Card>
+        )}
+
+        <View style={styles.expensesListHeader}>
+          <Text style={styles.expensesListTitle}>Recent Expenses</Text>
+          <TouchableOpacity onPress={handleAddExpense}>
+            <Ionicons name="add" size={24} color={theme.COLORS.primary} />
+          </TouchableOpacity>
+        </View>
+        
+        {loading && !refreshing ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={theme.COLORS.primary} />
+          </View>
+        ) : (
+          <>
+            {expenses.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <EmptyState size={180} />
+                <Text style={styles.emptyText}>No expenses yet</Text>
+                <Text style={styles.emptySubText}>
+                  Tap the + button to add your first expense
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={expenses}
+                renderItem={renderExpenseItem}
+                keyExtractor={item => item.id}
+                contentContainerStyle={styles.expensesList}
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                    colors={[theme.COLORS.primary]}
+                    tintColor={theme.COLORS.primary}
+                  />
+                }
+              />
+            )}
+          </>
+        )}
+        
+        <TouchableOpacity
+          onPress={handleAddExpense}
+          style={styles.addButtonContainer}
+        >
+          <LinearGradient
+            colors={theme.GRADIENTS.addButton}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.addButton}
+          >
+            <Ionicons name="add" size={28} color="white" />
+          </LinearGradient>
+        </TouchableOpacity>
+      </LinearGradient>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#F7F9FC',
+  },
   container: {
     flex: 1,
-    backgroundColor: theme.COLORS.background,
   },
   header: {
     flexDirection: 'row',
@@ -468,30 +516,35 @@ const styles = StyleSheet.create({
   budgetButton: {
     padding: 8,
     marginRight: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...theme.SHADOWS.small,
   },
   userAvatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: theme.COLORS.primary + '20',
     justifyContent: 'center',
     alignItems: 'center',
+    ...theme.SHADOWS.small,
   },
   userInitials: {
-    color: theme.COLORS.primary,
+    color: 'white',
     fontSize: theme.FONT_SIZES.md,
-    fontFamily: theme.FONTS.semibold,
+    fontFamily: theme.FONTS.semiBold,
   },
   totalExpensesCard: {
     marginHorizontal: theme.SPACING.lg,
     marginTop: theme.SPACING.md,
-    backgroundColor: theme.COLORS.primary,
     borderRadius: theme.BORDER_RADIUS.lg,
   },
   totalExpensesTitle: {
     fontSize: theme.FONT_SIZES.md,
     fontFamily: theme.FONTS.regular,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: 'rgba(255, 255, 255, 0.9)',
     marginBottom: theme.SPACING.md,
   },
   totalExpensesAmount: {
@@ -589,17 +642,21 @@ const styles = StyleSheet.create({
     color: theme.COLORS.text.secondary,
     textAlign: 'center',
   },
-  addButton: {
+  addButtonContainer: {
     position: 'absolute',
     right: theme.SPACING.lg,
     bottom: theme.SPACING.xl,
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: theme.COLORS.primary,
+    overflow: 'hidden',
+    ...theme.SHADOWS.large,
+  },
+  addButton: {
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    ...theme.SHADOWS.large,
   },
   modalOverlay: {
     flex: 1,

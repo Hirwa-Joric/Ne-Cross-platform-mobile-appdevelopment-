@@ -12,7 +12,11 @@ const COLORS = {
     secondary: '#6B7280',
     light: '#9CA3AF',
     white: '#FFFFFF'
-  }
+  },
+  // Additional accent colors for gradients
+  accent1: '#6C63FF', // Vibrant purple
+  accent2: '#553EB5', // Deep purple
+  accent3: '#4AC2C4', // Bright teal
 };
 
 const FONTS = {
@@ -75,8 +79,18 @@ const SHADOWS = {
 };
 
 const GRADIENTS = {
+  // Modern SaaS style gradients
   primaryButton: ['#3B3B98', '#323278'],
-  cardBackground: ['rgba(255, 255, 255, 0.9)', '#FFFFFF'],
+  primaryCard: ['#3B3B98', '#4B4BBE'],
+  accentCard: ['#553EB5', '#6C63FF'],
+  blueViolet: ['#3B3B98', '#6C63FF'],
+  purpleTeal: ['#6C63FF', '#4AC2C4'],
+  lightCard: ['#FFFFFF', '#F5F7FA'],
+  headerGradient: ['rgba(59, 59, 152, 0.9)', 'rgba(59, 59, 152, 0.7)'],
+  expensesCard: ['#3B3B98', '#553EB5'],
+  cardBackground: ['#FFFFFF', '#F7F9FC'],
+  addButton: ['#4B4BBE', '#3B3B98'],
+  avatar: ['#6C63FF', '#553EB5'],
 };
 
 const BORDER_RADIUS = {
